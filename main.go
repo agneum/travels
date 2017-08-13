@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
 	"github.com/buaazp/fasthttprouter"
 	"github.com/valyala/fasthttp"
@@ -15,14 +16,14 @@ import (
 type User struct {
 	Id        uint32 `json:"id" bson:"_id"`
 	Email     string `json:"email"`
-	Firstname string `json:"first_name"`
-	Lastname  string `json:"last_name"`
+	Firstname string `json:"first_name" bson:"first_name"`
+	Lastname  string `json:"last_name" bson:"last_name"`
 	Gender    string `json:"gender"`
-	Birthdate uint32 `json:"birth_date"`
+	Birthdate uint32 `json:"birth_date" bson:"birth_date"`
 }
 
 type Location struct {
-	Id       uint32 `json:"id"`
+	Id       uint32 `json:"id" bson:"_id"`
 	Place    string `json:"place"`
 	Country  string `json:"country"`
 	City     string `json:"city"`
@@ -30,10 +31,10 @@ type Location struct {
 }
 
 type Visit struct {
-	Id        uint32 `json:"id"`
+	Id        uint32 `json:"id" bson:"_id"`
 	Location  uint32 `json:"location"`
 	User      uint32 `json:"user"`
-	VisitedAt uint32 `json:"visited_at"`
+	VisitedAt uint32 `json:"visited_at" bson:"visited_at"`
 	Mark      uint8  `json:"mark"`
 }
 
@@ -51,35 +52,15 @@ func main() {
 	defer session.Close()
 
 	session.SetMode(mgo.Monotonic, true)
-	ensureIndex(session)
 
 	router := fasthttprouter.New()
 	router.Handle("GET", "/users/:id", GetUser(session))
 	router.Handle("GET", "/locations/:id", GetLocation(session))
 	router.Handle("GET", "/visits/:id", GetVisit(session))
 	router.Handle("POST", "/users/new", CreateUser(session))
+	router.Handle("POST", "/user/:userId", UpdateUser(session))
 
 	log.Fatal(fasthttp.ListenAndServe(":8084", router.Handler))
-}
-
-func ensureIndex(s *mgo.Session) {
-	session := s.Copy()
-	defer session.Close()
-
-	c := session.DB("travels").C("users")
-
-	index := mgo.Index{
-		Key:        []string{"id"},
-		Unique:     true,
-		DropDups:   true,
-		Background: true,
-		Sparse:     false,
-	}
-
-	err := c.EnsureIndex(index)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func GetUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
@@ -120,15 +101,49 @@ func CreateUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
 		var user User
 		err := json.Unmarshal(ctx.Request.Body(), &user)
 		if err != nil {
-			ResponseWithJSON(ctx, []byte("{}"), http.StatusBadRequest)
+			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return
 		}
 
 		c := session.DB("travels").C("users")
 		err = c.Insert(user)
 
 		if err != nil {
-			ResponseWithJSON(ctx, []byte("{}"), http.StatusBadRequest)
+			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return
 		}
+
+		ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
+	}
+}
+
+func UpdateUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
+	return func(ctx *fasthttp.RequestCtx) {
+		session := s.Copy()
+		defer session.Close()
+
+		userId, err := parseIdParameter(ctx.UserValue("userId"))
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return
+		}
+
+		var user interface{}
+		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &user)
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return
+		}
+
+		c := session.DB("travels").C("users")
+		err = c.Update(bson.M{"_id": userId}, bson.M{"$set": &user})
+
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return
+		}
+
+		ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
 	}
 }
 
