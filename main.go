@@ -2,28 +2,27 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/buaazp/fasthttprouter"
+	"github.com/qiangxue/fasthttp-routing"
 	"github.com/valyala/fasthttp"
 )
 
 type User struct {
-	Id        uint32 `json:"id" bson:"_id"`
+	Id        uint32 `json:"id"`
 	Email     string `json:"email"`
 	Firstname string `json:"first_name" bson:"first_name"`
 	Lastname  string `json:"last_name" bson:"last_name"`
 	Gender    string `json:"gender"`
-	Birthdate uint32 `json:"birth_date" bson:"birth_date"`
+	Birthdate int32  `json:"birth_date" bson:"birth_date"`
 }
 
 type Location struct {
-	Id       uint32 `json:"id" bson:"_id"`
+	Id       uint32 `json:"id"`
 	Place    string `json:"place"`
 	Country  string `json:"country"`
 	City     string `json:"city"`
@@ -31,14 +30,14 @@ type Location struct {
 }
 
 type Visit struct {
-	Id        uint32 `json:"id" bson:"_id"`
+	Id        uint32 `json:"id"`
 	Location  uint32 `json:"location"`
 	User      uint32 `json:"user"`
 	VisitedAt uint32 `json:"visited_at" bson:"visited_at"`
 	Mark      uint8  `json:"mark"`
 }
 
-func ResponseWithJSON(ctx *fasthttp.RequestCtx, json []byte, code int) {
+func ResponseWithJSON(ctx *routing.Context, json []byte, code int) {
 	ctx.SetContentType("application/json; charset=utf-8")
 	ctx.SetStatusCode(code)
 	ctx.SetBody(json)
@@ -53,48 +52,49 @@ func main() {
 
 	session.SetMode(mgo.Monotonic, true)
 
-	router := fasthttprouter.New()
-	router.Handle("GET", "/users/:id", GetUser(session))
-	router.Handle("GET", "/locations/:id", GetLocation(session))
-	router.Handle("GET", "/visits/:id", GetVisit(session))
-	router.Handle("POST", "/users/new", CreateUser(session))
-	router.Handle("POST", "/user/:userId", UpdateUser(session))
+	router := routing.New()
+	router.Get(`/users/<id:\d+>`, GetUser(session))
+	router.Get(`/locations/<id:\d+>`, GetLocation(session))
+	router.Get(`/visits/<id:\d+>`, GetVisit(session))
+	router.Post("/users/new", CreateUser(session))
+	router.Post(`/users/<id:\d+>`, UpdateUser(session))
 
-	log.Fatal(fasthttp.ListenAndServe(":8084", router.Handler))
+	panic(fasthttp.ListenAndServe(":8084", router.HandleRequest))
 }
 
-func GetUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
-	return func(ctx *fasthttp.RequestCtx) {
+func GetUser(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
 		var user User
 		c := session.DB("travels").C("users")
 
-		userId, err := parseIdParameter(ctx.UserValue("id"))
+		userId, err := parseIdParameter(ctx.Param("id"))
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
-		err = c.FindId(userId).One(&user)
+		err = c.Find(bson.M{"id": userId}).One(&user)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
 		data, err := json.Marshal(user)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
 		ResponseWithJSON(ctx, data, http.StatusOK)
+		return nil
 	}
 }
 
-func CreateUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
-	return func(ctx *fasthttp.RequestCtx) {
+func CreateUser(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
@@ -102,7 +102,7 @@ func CreateUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
 		err := json.Unmarshal(ctx.Request.Body(), &user)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return
+			return nil
 		}
 
 		c := session.DB("travels").C("users")
@@ -110,29 +110,30 @@ func CreateUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
 
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return
+			return nil
 		}
 
 		ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
+		return nil
 	}
 }
 
-func UpdateUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
-	return func(ctx *fasthttp.RequestCtx) {
+func UpdateUser(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
-		userId, err := parseIdParameter(ctx.UserValue("userId"))
+		userId, err := parseIdParameter(ctx.Param("id"))
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
 		var user interface{}
 		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &user)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return
+			return nil
 		}
 
 		c := session.DB("travels").C("users")
@@ -140,70 +141,73 @@ func UpdateUser(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
 
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return
+			return nil
 		}
 
 		ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
+		return nil
 	}
 }
 
-func GetLocation(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
-	return func(ctx *fasthttp.RequestCtx) {
+func GetLocation(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
 		var location Location
 		c := session.DB("travels").C("locations")
 
-		locationId, err := parseIdParameter(ctx.UserValue("id"))
+		locationId, err := parseIdParameter(ctx.Param("id"))
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
-		err = c.FindId(locationId).One(&location)
+		err = c.Find(bson.M{"id": locationId}).One(&location)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
 		data, err := json.Marshal(location)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
 		ResponseWithJSON(ctx, data, http.StatusOK)
+		return nil
 	}
 }
 
-func GetVisit(s *mgo.Session) func(ctx *fasthttp.RequestCtx) {
-	return func(ctx *fasthttp.RequestCtx) {
+func GetVisit(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
 		var visit Visit
 		c := session.DB("travels").C("visits")
 
-		visitId, err := parseIdParameter(ctx.UserValue("id"))
+		visitId, err := parseIdParameter(ctx.Param("id"))
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
-		err = c.FindId(visitId).One(&visit)
+		err = c.FindId(bson.M{"id": visitId}).One(&visit)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
 		data, err := json.Marshal(visit)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return
+			return nil
 		}
 
 		ResponseWithJSON(ctx, data, http.StatusOK)
+		return nil
 	}
 }
 
