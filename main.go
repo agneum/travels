@@ -219,14 +219,20 @@ func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
 
 		c := session.DB("travels").C("visits")
 
-		userId, err := parseIdParameter(ctx.Param("id"))
+		coreFilters, err := getCoreFiltersForUserVisits(ctx)
 		if err != nil {
-			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		locationFilters, err := getLocationFiltersForUserVisits(ctx)
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
 
 		pipeline := []bson.M{
-			bson.M{"$match": bson.M{"user": userId}},
+			bson.M{"$match": coreFilters},
 			bson.M{
 				"$lookup": bson.M{
 					"from":         "locations",
@@ -235,6 +241,7 @@ func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
 					"as":           "location",
 				},
 			},
+			bson.M{"$match": locationFilters},
 			bson.M{"$unwind": "$location"},
 			bson.M{"$sort": bson.M{"visited_at": 1}},
 			bson.M{"$project": bson.M{
@@ -264,6 +271,58 @@ func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
 		ResponseWithJSON(ctx, data, http.StatusOK)
 		return nil
 	}
+}
+
+func getCoreFiltersForUserVisits(ctx *routing.Context) (map[string]interface{}, error) {
+
+	coreFilters := make(map[string]interface{}, 3)
+
+	userId, err := parseIdParameter(ctx.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	coreFilters["user"] = userId
+
+	visitedAt := make(map[string]int, 2)
+
+	if fromDate := ctx.QueryArgs().Peek("fromDate"); len(fromDate) > 0 {
+		date, err := strconv.Atoi(string(fromDate))
+		if err != nil {
+			return nil, err
+		}
+		visitedAt["$gt"] = date
+	}
+
+	if toDate := ctx.QueryArgs().Peek("toDate"); len(toDate) > 0 {
+		date, err := strconv.Atoi(string(toDate))
+		if err != nil {
+			return nil, err
+		}
+		visitedAt["$lt"] = date
+	}
+
+	if len(visitedAt) > 0 {
+		coreFilters["visited_at"] = visitedAt
+	}
+
+	return coreFilters, nil
+}
+
+func getLocationFiltersForUserVisits(ctx *routing.Context) (map[string]interface{}, error) {
+	locationFilters := make(map[string]interface{}, 2)
+	if distance := ctx.QueryArgs().Peek("toDistance"); len(distance) > 0 {
+		dist, err := strconv.Atoi(string(distance))
+		if err != nil {
+			return nil, err
+		}
+		locationFilters["location.distance"] = bson.M{"$lt": dist}
+	}
+
+	if country := ctx.QueryArgs().Peek("country"); len(country) > 0 {
+		locationFilters["location.country"] = bson.M{"$eq": string(country)}
+	}
+
+	return locationFilters, nil
 }
 
 func parseIdParameter(parameter interface{}) (id uint64, err error) {
