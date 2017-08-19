@@ -56,6 +56,7 @@ func main() {
 	router.Get(`/users/<id:\d+>`, GetUser(session))
 	router.Get(`/locations/<id:\d+>`, GetLocation(session))
 	router.Get(`/visits/<id:\d+>`, GetVisit(session))
+	router.Get(`/users/<id:\d+>/visits`, GetUserVisit(session))
 	router.Post("/users/new", CreateUser(session))
 	router.Post(`/users/<id:\d+>`, UpdateUser(session))
 
@@ -201,6 +202,60 @@ func GetVisit(s *mgo.Session) func(ctx *routing.Context) error {
 		}
 
 		data, err := json.Marshal(visit)
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		ResponseWithJSON(ctx, data, http.StatusOK)
+		return nil
+	}
+}
+
+func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
+		session := s.Copy()
+		defer session.Close()
+
+		c := session.DB("travels").C("visits")
+
+		userId, err := parseIdParameter(ctx.Param("id"))
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		pipeline := []bson.M{
+			bson.M{"$match": bson.M{"user": userId}},
+			bson.M{
+				"$lookup": bson.M{
+					"from":         "locations",
+					"localField":   "location",
+					"foreignField": "id",
+					"as":           "location",
+				},
+			},
+			bson.M{"$unwind": "$location"},
+			bson.M{"$sort": bson.M{"visited_at": 1}},
+			bson.M{"$project": bson.M{
+				"_id":        0,
+				"mark":       1,
+				"visited_at": 1,
+				"place":      "$location.place",
+			}},
+		}
+
+		visits := []bson.M{}
+
+		err = c.Pipe(pipeline).All(&visits)
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		response := make(map[string][]bson.M, 1)
+		response["visits"] = visits
+		data, err := json.Marshal(response)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil
