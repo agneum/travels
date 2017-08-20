@@ -31,7 +31,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	importData(session)
+	err = importData(session)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = ensureIndexes(session)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func unzip(archive, target string) error {
@@ -71,13 +79,13 @@ func unzip(archive, target string) error {
 	return nil
 }
 
-func importData(s *mgo.Session) {
+func importData(s *mgo.Session) error {
 	session := s.Copy()
 	defer session.Close()
 
 	files, err := ioutil.ReadDir(dataPath)
 	if err != nil {
-		log.Printf("%+v\n", err.Error())
+		return err
 	}
 
 	for _, f := range files {
@@ -90,6 +98,8 @@ func importData(s *mgo.Session) {
 		}
 		fmt.Println(f.Name())
 	}
+
+	return nil
 }
 
 func importFile(s *mgo.Session, filename string) error {
@@ -111,4 +121,34 @@ func importFile(s *mgo.Session, filename string) error {
 	err = users.Insert(importData[collection]...)
 
 	return err
+}
+
+func ensureIndexes(s *mgo.Session) error {
+	c := s.DB("travels").C("users")
+	err := c.EnsureIndexKey("id")
+	if err != nil {
+		return err
+	}
+
+	c = s.DB("travels").C("locations")
+	err = c.EnsureIndexKey("id")
+	if err != nil {
+		return err
+	}
+
+	c = s.DB("travels").C("visits")
+	err = c.EnsureIndexKey("id")
+	if err != nil {
+		return err
+	}
+	index := mgo.Index{
+		Key: []string{"user", "location"},
+	}
+	err = c.EnsureIndex(index)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
