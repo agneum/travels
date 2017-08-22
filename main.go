@@ -57,6 +57,7 @@ func main() {
 	router.Get(`/locations/<id:\d+>`, GetLocation(session))
 	router.Get(`/visits/<id:\d+>`, GetVisit(session))
 	router.Get(`/users/<id:\d+>/visits`, GetUserVisit(session))
+	router.Get(`/locations/<id:\d+>/avg`, GetAverageMark(session))
 	router.Post("/users/new", CreateUser(session))
 	router.Post(`/users/<id:\d+>`, UpdateUser(session))
 
@@ -263,6 +264,49 @@ func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
 		response := make(map[string][]bson.M, 1)
 		response["visits"] = visits
 		data, err := json.Marshal(response)
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		ResponseWithJSON(ctx, data, http.StatusOK)
+		return nil
+	}
+}
+
+func GetAverageMark(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
+		session := s.Copy()
+		defer session.Close()
+
+		c := session.DB("travels").C("visits")
+
+		locationId, err := parseIdParameter(ctx.Param("id"))
+		if err != nil {
+			return err
+		}
+
+		pipeline := []bson.M{
+			bson.M{"$match": bson.M{"location": locationId}},
+			bson.M{"$group": bson.M{
+				"_id": "$location",
+				"avg": bson.M{"$avg": "$mark"},
+			}},
+			bson.M{"$project": bson.M{
+				"_id": 0,
+				"avg": 1,
+			}},
+		}
+
+		averageMark := bson.M{}
+
+		err = c.Pipe(pipeline).One(&averageMark)
+		if err != nil {
+			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		data, err := json.Marshal(averageMark)
 		if err != nil {
 			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil
