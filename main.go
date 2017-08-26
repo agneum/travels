@@ -8,6 +8,7 @@ import (
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
+	"github.com/agneum/travels/importer"
 	"github.com/qiangxue/fasthttp-routing"
 	"github.com/valyala/fasthttp"
 )
@@ -43,6 +44,10 @@ func ResponseWithJSON(ctx *routing.Context, json []byte, code int) {
 	ctx.SetBody(json)
 }
 
+func init() {
+	importer.Import()
+}
+
 func main() {
 	session, err := mgo.Dial("localhost:27017")
 	if err != nil {
@@ -61,7 +66,7 @@ func main() {
 	router.Post("/users/new", CreateUser(session))
 	router.Post(`/users/<id:\d+>`, UpdateUser(session))
 
-	panic(fasthttp.ListenAndServe(":8084", router.HandleRequest))
+	panic(fasthttp.ListenAndServe(":80", router.HandleRequest))
 }
 
 func GetUser(s *mgo.Session) func(ctx *routing.Context) error {

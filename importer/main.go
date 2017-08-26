@@ -1,4 +1,4 @@
-package main
+package importer
 
 import (
 	"archive/zip"
@@ -15,9 +15,9 @@ import (
 )
 
 const zipPath = "/tmp/data"
-const dataPath = "../tmp"
+const dataPath = "/tmp/extract"
 
-func main() {
+func Import() {
 	session, err := mgo.Dial("localhost:27017")
 	if err != nil {
 		panic(err)
@@ -26,7 +26,7 @@ func main() {
 
 	session.SetMode(mgo.Monotonic, true)
 
-	err = unzip(fmt.Sprintf("%s/%s", zipPath, "data.zip"), "../tmp")
+	err = unzip(fmt.Sprintf("%s/%s", zipPath, "data.zip"), dataPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -117,8 +117,8 @@ func importFile(s *mgo.Session, filename string) error {
 		return err
 	}
 
-	users := s.DB("travels").C(collection)
-	err = users.Insert(importData[collection]...)
+	dataCollection := s.DB("travels").C(collection)
+	err = dataCollection.Insert(importData[collection]...)
 
 	return err
 }

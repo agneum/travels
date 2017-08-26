@@ -66,14 +66,14 @@ RUN set -x \
 	&& rm -rf /var/lib/mongodb \
 	&& mv /etc/mongod.conf /etc/mongod.conf.orig
 
-RUN mkdir -p /data/db /data/configdb \
-	&& chown -R mongodb:mongodb /data/db /data/configdb
-VOLUME /data/db /data/configdb
+RUN mkdir -p /data/db /data/configdb /tmp/extract \
+	&& chown -R mongodb:mongodb /data/db /data/configdb && chmod +x /tmp/extract
+VOLUME /data/db /data/configdb /tmp/extract
 
 COPY mongod.conf /etc/
 
 ADD builds/main /home/main
 
-EXPOSE 8084
+EXPOSE 80
 
 CMD mongod -f /etc/mongod.conf && ./home/main
