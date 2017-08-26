@@ -141,10 +141,18 @@ func ensureIndexes(s *mgo.Session) error {
 	if err != nil {
 		return err
 	}
-	index := mgo.Index{
+
+	err = c.EnsureIndex(mgo.Index{
 		Key: []string{"user", "location"},
+	})
+
+	if err != nil {
+		return err
 	}
-	err = c.EnsureIndex(index)
+
+	err = c.EnsureIndex(mgo.Index{
+		Key: []string{"location", "visited_at", "user"},
+	})
 
 	if err != nil {
 		return err
