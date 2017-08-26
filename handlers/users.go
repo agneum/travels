@@ -57,7 +57,8 @@ func CreateUser(s *mgo.Session) func(ctx *routing.Context) error {
 
 		var user User
 		err := json.Unmarshal(ctx.Request.Body(), &user)
-		if err != nil {
+
+		if err != nil || user.Email == "" {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
@@ -86,15 +87,16 @@ func UpdateUser(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		var user interface{}
+		var user map[string]interface{}
 		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &user)
-		if err != nil {
+
+		if err != nil || user["email"] == nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
 
 		c := session.DB("travels").C("users")
-		err = c.Update(bson.M{"_id": userId}, bson.M{"$set": &user})
+		err = c.Update(bson.M{"id": userId}, bson.M{"$set": &user})
 
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)

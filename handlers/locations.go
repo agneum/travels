@@ -20,6 +20,64 @@ type Location struct {
 	Distance uint32 `json:"distance"`
 }
 
+func CreateLocation(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
+		session := s.Copy()
+		defer session.Close()
+
+		var location Location
+		err := json.Unmarshal(ctx.Request.Body(), &location)
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		c := session.DB("travels").C("locations")
+		err = c.Insert(location)
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		utils.ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
+		return nil
+	}
+}
+
+func UpdateLocation(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
+		session := s.Copy()
+		defer session.Close()
+
+		locationId, err := utils.ParseIdParameter(ctx.Param("id"))
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		var location map[string]interface{}
+		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &location)
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		c := session.DB("travels").C("locations")
+		err = c.Update(bson.M{"id": locationId}, bson.M{"$set": &location})
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		utils.ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
+		return nil
+	}
+}
+
 func GetLocation(s *mgo.Session) func(ctx *routing.Context) error {
 	return func(ctx *routing.Context) error {
 		session := s.Copy()

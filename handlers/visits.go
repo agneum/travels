@@ -19,6 +19,64 @@ type Visit struct {
 	Mark      uint8  `json:"mark"`
 }
 
+func CreateVisit(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
+		session := s.Copy()
+		defer session.Close()
+
+		var visit Visit
+		err := json.Unmarshal(ctx.Request.Body(), &visit)
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		c := session.DB("travels").C("visits")
+		err = c.Insert(visit)
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		utils.ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
+		return nil
+	}
+}
+
+func UpdateVisit(s *mgo.Session) func(ctx *routing.Context) error {
+	return func(ctx *routing.Context) error {
+		session := s.Copy()
+		defer session.Close()
+
+		visitId, err := utils.ParseIdParameter(ctx.Param("id"))
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		var visit map[string]interface{}
+		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &visit)
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		c := session.DB("travels").C("visits")
+		err = c.Update(bson.M{"id": visitId}, bson.M{"$set": &visit})
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		utils.ResponseWithJSON(ctx, []byte("{}"), http.StatusOK)
+		return nil
+	}
+}
+
 func GetVisit(s *mgo.Session) func(ctx *routing.Context) error {
 	return func(ctx *routing.Context) error {
 		session := s.Copy()
@@ -33,7 +91,7 @@ func GetVisit(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		err = c.FindId(bson.M{"id": visitId}).One(&visit)
+		err = c.Find(bson.M{"id": visitId}).One(&visit)
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil

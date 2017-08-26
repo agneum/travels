@@ -125,19 +125,28 @@ func importFile(s *mgo.Session, filename string) error {
 
 func ensureIndexes(s *mgo.Session) error {
 	c := s.DB("travels").C("users")
-	err := c.EnsureIndexKey("id")
+	err := c.EnsureIndex(mgo.Index{
+		Key:    []string{"id"},
+		Unique: true,
+	})
 	if err != nil {
 		return err
 	}
 
 	c = s.DB("travels").C("locations")
-	err = c.EnsureIndexKey("id")
+	err = c.EnsureIndex(mgo.Index{
+		Key:    []string{"id"},
+		Unique: true,
+	})
 	if err != nil {
 		return err
 	}
 
 	c = s.DB("travels").C("visits")
-	err = c.EnsureIndexKey("id")
+	err = c.EnsureIndex(mgo.Index{
+		Key:    []string{"id"},
+		Unique: true,
+	})
 	if err != nil {
 		return err
 	}
