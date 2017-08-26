@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -286,13 +287,14 @@ func GetAverageMark(s *mgo.Session) func(ctx *routing.Context) error {
 
 		c := session.DB("travels").C("visits")
 
-		locationId, err := parseIdParameter(ctx.Param("id"))
+		coreFilters, err := getCoreFiltersForAverageMark(ctx)
 		if err != nil {
-			return err
+			ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
 		}
 
 		pipeline := []bson.M{
-			bson.M{"$match": bson.M{"location": locationId}},
+			bson.M{"$match": coreFilters},
 			bson.M{"$group": bson.M{
 				"_id": "$location",
 				"avg": bson.M{"$avg": "$mark"},
@@ -311,15 +313,44 @@ func GetAverageMark(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		data, err := json.Marshal(averageMark)
-		if err != nil {
-			ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return nil
-		}
-
-		ResponseWithJSON(ctx, data, http.StatusOK)
+		ResponseWithJSON(ctx, []byte(fmt.Sprintf("{\"avg\":%.5f}", averageMark["avg"])), http.StatusOK)
 		return nil
 	}
+}
+
+func getCoreFiltersForAverageMark(ctx *routing.Context) (map[string]interface{}, error) {
+
+	coreFilters := make(map[string]interface{}, 3)
+
+	locationId, err := parseIdParameter(ctx.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	coreFilters["location"] = locationId
+
+	visitedAt := make(map[string]int, 2)
+
+	if fromDate := ctx.QueryArgs().Peek("fromDate"); len(fromDate) > 0 {
+		date, err := strconv.Atoi(string(fromDate))
+		if err != nil {
+			return nil, err
+		}
+		visitedAt["$gt"] = date
+	}
+
+	if toDate := ctx.QueryArgs().Peek("toDate"); len(toDate) > 0 {
+		date, err := strconv.Atoi(string(toDate))
+		if err != nil {
+			return nil, err
+		}
+		visitedAt["$lt"] = date
+	}
+
+	if len(visitedAt) > 0 {
+		coreFilters["visited_at"] = visitedAt
+	}
+
+	return coreFilters, nil
 }
 
 func getCoreFiltersForUserVisits(ctx *routing.Context) (map[string]interface{}, error) {
