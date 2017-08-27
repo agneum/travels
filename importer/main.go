@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	mgo "gopkg.in/mgo.v2"
 )
@@ -25,6 +26,7 @@ func Import() {
 	defer session.Close()
 
 	session.SetMode(mgo.Monotonic, true)
+	session.SetSocketTimeout(10 * time.Minute)
 
 	err = unzip(fmt.Sprintf("%s/%s", zipPath, "data.zip"), dataPath)
 	if err != nil {
