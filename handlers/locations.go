@@ -30,7 +30,7 @@ func CreateLocation(s *mgo.Session) func(ctx *routing.Context) error {
 		var location Location
 		err := json.Unmarshal(ctx.Request.Body(), &location)
 
-		if err != nil {
+		if err != nil || location.Id == 0 {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
@@ -63,6 +63,16 @@ func UpdateLocation(s *mgo.Session) func(ctx *routing.Context) error {
 		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &location)
 
 		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		if val, ok := location["distance"]; ok && val == nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		if val, ok := location["city"]; ok && val == nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
@@ -113,25 +123,32 @@ func GetLocation(s *mgo.Session) func(ctx *routing.Context) error {
 
 func GetAverageMark(s *mgo.Session) func(ctx *routing.Context) error {
 	return func(ctx *routing.Context) error {
-		session := s.Copy()
-		defer session.Close()
-
-		c := session.DB("travels").C("visits")
-
 		coreFilters, err := getCoreFiltersForAverageMark(ctx)
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
 
-		pipeline := make([]bson.M, 0, 5)
-		pipeline = append(pipeline, bson.M{"$match": coreFilters})
+		session := s.Copy()
+		defer session.Close()
+
+		l := session.DB("travels").C("locations")
+		count, err := l.Find(bson.M{"id": coreFilters["location"]}).Count()
+		if err != nil || count == 0 {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
 
 		userFilters, err := getUserFiltersForAverageMark(ctx)
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(err.Error()), http.StatusBadRequest)
 			return nil
 		}
+
+		c := session.DB("travels").C("visits")
+
+		pipeline := make([]bson.M, 0, 5)
+		pipeline = append(pipeline, bson.M{"$match": coreFilters})
 
 		if len(userFilters) > 0 {
 			pipeline = append(pipeline, bson.M{

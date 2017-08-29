@@ -89,8 +89,9 @@ func UpdateUser(s *mgo.Session) func(ctx *routing.Context) error {
 
 		var user map[string]interface{}
 		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &user)
+		_, emailExists := user["email"]
 
-		if err != nil || user["email"] == nil {
+		if err != nil || (emailExists && user["email"] == nil) {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}

@@ -27,7 +27,7 @@ func CreateVisit(s *mgo.Session) func(ctx *routing.Context) error {
 		var visit Visit
 		err := json.Unmarshal(ctx.Request.Body(), &visit)
 
-		if err != nil {
+		if err != nil || visit.Id == 0 {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
@@ -60,6 +60,16 @@ func UpdateVisit(s *mgo.Session) func(ctx *routing.Context) error {
 		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &visit)
 
 		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		if val, ok := visit["location"]; ok && val == nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		if val, ok := visit["visited_at"]; ok && val == nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
@@ -110,14 +120,19 @@ func GetVisit(s *mgo.Session) func(ctx *routing.Context) error {
 
 func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
 	return func(ctx *routing.Context) error {
-		session := s.Copy()
-		defer session.Close()
-
-		c := session.DB("travels").C("visits")
-
 		coreFilters, err := getCoreFiltersForUserVisits(ctx)
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+			return nil
+		}
+
+		session := s.Copy()
+		defer session.Close()
+
+		u := session.DB("travels").C("locations")
+		count, err := u.Find(bson.M{"id": coreFilters["user"]}).Count()
+		if err != nil || count == 0 {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil
 		}
 
@@ -126,6 +141,8 @@ func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
+
+		c := session.DB("travels").C("visits")
 
 		pipeline := []bson.M{
 			bson.M{"$match": coreFilters},
