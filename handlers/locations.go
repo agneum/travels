@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/agneum/travels/utils"
 	routing "github.com/qiangxue/fasthttp-routing"
@@ -122,23 +124,38 @@ func GetAverageMark(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		pipeline := []bson.M{
-			bson.M{"$match": coreFilters},
-			bson.M{"$group": bson.M{
-				"_id": "$location",
-				"avg": bson.M{"$avg": "$mark"},
-			}},
-			bson.M{"$project": bson.M{
-				"_id": 0,
-				"avg": 1,
-			}},
+		pipeline := make([]bson.M, 0, 5)
+		pipeline = append(pipeline, bson.M{"$match": coreFilters})
+
+		userFilters, err := getUserFiltersForAverageMark(ctx)
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(err.Error()), http.StatusBadRequest)
+			return nil
 		}
+
+		if len(userFilters) > 0 {
+			pipeline = append(pipeline, bson.M{
+				"$lookup": bson.M{
+					"from":         "users",
+					"localField":   "user",
+					"foreignField": "id",
+					"as":           "user",
+				},
+			},
+				bson.M{"$match": userFilters},
+				bson.M{"$unwind": "$user"})
+		}
+
+		pipeline = append(pipeline, bson.M{"$group": bson.M{
+			"_id": "$location",
+			"avg": bson.M{"$avg": "$mark"},
+		}})
 
 		averageMark := bson.M{}
 
 		err = c.Pipe(pipeline).One(&averageMark)
 		if err != nil {
-			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			utils.ResponseWithJSON(ctx, []byte(fmt.Sprintf("{\"avg\":0.0}")), http.StatusOK)
 			return nil
 		}
 
@@ -148,7 +165,6 @@ func GetAverageMark(s *mgo.Session) func(ctx *routing.Context) error {
 }
 
 func getCoreFiltersForAverageMark(ctx *routing.Context) (map[string]interface{}, error) {
-
 	coreFilters := make(map[string]interface{}, 3)
 
 	locationId, err := utils.ParseIdParameter(ctx.Param("id"))
@@ -180,4 +196,42 @@ func getCoreFiltersForAverageMark(ctx *routing.Context) (map[string]interface{},
 	}
 
 	return coreFilters, nil
+}
+
+func getUserFiltersForAverageMark(ctx *routing.Context) (map[string]interface{}, error) {
+	userFilters := make(map[string]interface{}, 3)
+
+	if gender := ctx.QueryArgs().Peek("gender"); len(gender) > 0 {
+		g := string(gender)
+		if g != "m" && g != "f" {
+			return nil, errors.New("")
+		}
+		userFilters["user.gender"] = g
+	}
+
+	age := make(map[string]int64, 2)
+	currentTime := time.Now()
+
+	if fromAge := ctx.QueryArgs().Peek("fromAge"); len(fromAge) > 0 {
+		date, err := strconv.Atoi(string(fromAge))
+		if err != nil {
+			return nil, err
+		}
+
+		age["$lt"] = currentTime.AddDate(-1*date, 0, 0).Unix()
+	}
+
+	if toAge := ctx.QueryArgs().Peek("toAge"); len(toAge) > 0 {
+		date, err := strconv.Atoi(string(toAge))
+		if err != nil {
+			return nil, err
+		}
+		age["$gt"] = currentTime.AddDate(-1*date, 0, 0).Unix()
+	}
+
+	if len(age) > 0 {
+		userFilters["user.birth_date"] = age
+	}
+
+	return userFilters, nil
 }

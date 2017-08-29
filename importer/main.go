@@ -135,6 +135,13 @@ func ensureIndexes(s *mgo.Session) error {
 		return err
 	}
 
+	err = c.EnsureIndex(mgo.Index{
+		Key: []string{"birth_date", "gender"},
+	})
+	if err != nil {
+		return err
+	}
+
 	c = s.DB("travels").C("locations")
 	err = c.EnsureIndex(mgo.Index{
 		Key:    []string{"id"},
@@ -156,7 +163,6 @@ func ensureIndexes(s *mgo.Session) error {
 	err = c.EnsureIndex(mgo.Index{
 		Key: []string{"user", "location"},
 	})
-
 	if err != nil {
 		return err
 	}
@@ -164,7 +170,6 @@ func ensureIndexes(s *mgo.Session) error {
 	err = c.EnsureIndex(mgo.Index{
 		Key: []string{"location", "visited_at", "user"},
 	})
-
 	if err != nil {
 		return err
 	}
