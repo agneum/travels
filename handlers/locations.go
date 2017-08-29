@@ -59,18 +59,18 @@ func UpdateLocation(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		var location map[string]interface{}
-		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &location)
-
-		if err != nil {
-			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
-			return nil
-		}
-
 		c := session.DB("travels").C("locations")
 		count, err := c.Find(bson.M{"id": locationId}).Count()
 		if err != nil || count == 0 {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		var location map[string]interface{}
+		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &location)
+
+		if err != nil {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
 			return nil
 		}
 
