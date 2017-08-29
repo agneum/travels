@@ -64,17 +64,20 @@ func UpdateVisit(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		if val, ok := visit["location"]; ok && val == nil {
-			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return nil
-		}
-
-		if val, ok := visit["visited_at"]; ok && val == nil {
-			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return nil
-		}
-
 		c := session.DB("travels").C("visits")
+		count, err := c.Find(bson.M{"id": visitId}).Count()
+		if err != nil || count == 0 {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		for _, v := range visit {
+			if v == nil {
+				utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+				return nil
+			}
+		}
+
 		err = c.Update(bson.M{"id": visitId}, bson.M{"$set": &visit})
 
 		if err != nil {
@@ -129,7 +132,7 @@ func GetUserVisit(s *mgo.Session) func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
-		u := session.DB("travels").C("locations")
+		u := session.DB("travels").C("users")
 		count, err := u.Find(bson.M{"id": coreFilters["user"]}).Count()
 		if err != nil || count == 0 {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)

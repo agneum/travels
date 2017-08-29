@@ -67,17 +67,20 @@ func UpdateLocation(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		if val, ok := location["distance"]; ok && val == nil {
-			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return nil
-		}
-
-		if val, ok := location["city"]; ok && val == nil {
-			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
-			return nil
-		}
-
 		c := session.DB("travels").C("locations")
+		count, err := c.Find(bson.M{"id": locationId}).Count()
+		if err != nil || count == 0 {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
+			return nil
+		}
+
+		for _, v := range location {
+			if v == nil {
+				utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+				return nil
+			}
+		}
+
 		err = c.Update(bson.M{"id": locationId}, bson.M{"$set": &location})
 
 		if err != nil {

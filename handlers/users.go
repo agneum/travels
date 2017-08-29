@@ -89,14 +89,21 @@ func UpdateUser(s *mgo.Session) func(ctx *routing.Context) error {
 
 		var user map[string]interface{}
 		err = bson.UnmarshalJSON([]byte(ctx.Request.Body()), &user)
-		_, emailExists := user["email"]
 
-		if err != nil || (emailExists && user["email"] == nil) {
-			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+		c := session.DB("travels").C("users")
+		count, err := c.Find(bson.M{"id": userId}).Count()
+		if err != nil || count == 0 {
+			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil
 		}
 
-		c := session.DB("travels").C("users")
+		for _, v := range user {
+			if v == nil {
+				utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
+				return nil
+			}
+		}
+
 		err = c.Update(bson.M{"id": userId}, bson.M{"$set": &user})
 
 		if err != nil {
