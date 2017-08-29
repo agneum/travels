@@ -11,6 +11,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+//easyjson:json
 type Visit struct {
 	Id        uint32 `json:"id"`
 	Location  uint32 `json:"location"`

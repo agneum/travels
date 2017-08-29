@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/agneum/travels/utils"
@@ -10,6 +9,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+//easyjson:json
 type User struct {
 	Id        uint32 `json:"id"`
 	Email     string `json:"email"`
@@ -39,7 +39,7 @@ func GetUser(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		data, err := json.Marshal(user)
+		data, err := user.MarshalJSON()
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil
@@ -55,8 +55,8 @@ func CreateUser(s *mgo.Session) func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
-		var user User
-		err := json.Unmarshal(ctx.Request.Body(), &user)
+		user := &User{}
+		err := user.UnmarshalJSON(ctx.Request.Body())
 
 		if err != nil || user.Email == "" {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)

@@ -14,6 +14,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+//easyjson:json
 type Location struct {
 	Id       uint32 `json:"id"`
 	Place    string `json:"place"`
