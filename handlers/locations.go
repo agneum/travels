@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -28,8 +27,8 @@ func CreateLocation(s *mgo.Session) func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
-		var location Location
-		err := json.Unmarshal(ctx.Request.Body(), &location)
+		location := &Location{}
+		err := location.UnmarshalJSON(ctx.Request.Body())
 
 		if err != nil || location.Id == 0 {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
@@ -114,7 +113,7 @@ func GetLocation(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		data, err := json.Marshal(location)
+		data, err := location.MarshalJSON()
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil

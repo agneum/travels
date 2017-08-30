@@ -25,8 +25,8 @@ func CreateVisit(s *mgo.Session) func(ctx *routing.Context) error {
 		session := s.Copy()
 		defer session.Close()
 
-		var visit Visit
-		err := json.Unmarshal(ctx.Request.Body(), &visit)
+		visit := &Visit{}
+		err := visit.UnmarshalJSON(ctx.Request.Body())
 
 		if err != nil || visit.Id == 0 {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusBadRequest)
@@ -111,7 +111,7 @@ func GetVisit(s *mgo.Session) func(ctx *routing.Context) error {
 			return nil
 		}
 
-		data, err := json.Marshal(visit)
+		data, err := visit.MarshalJSON()
 		if err != nil {
 			utils.ResponseWithJSON(ctx, []byte(""), http.StatusNotFound)
 			return nil
